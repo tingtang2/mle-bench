@@ -1,1 +1,3 @@
-git+https://github.com/thesofakillers/aideml@v6.3.3
+# Original: git+https://github.com/thesofakillers/aideml@v6.3.3
+# Now using local modified copy (edit aideml/aide/agent.py directly):
+-e ./aideml

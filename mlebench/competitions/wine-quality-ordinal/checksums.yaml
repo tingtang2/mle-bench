@@ -1,0 +1,8 @@
+# Checksums will be populated after running: mlebench prepare -c wine-quality-ordinal
+private:
+  test.csv: null
+public:
+  sample_submission.csv: null
+  test.csv: null
+  train.csv: null
+zip: null
