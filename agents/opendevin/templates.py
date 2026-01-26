@@ -18,7 +18,7 @@ embedding_model=""
 [sandbox]
 user_id=1000
 use_host_network=true
-timeout=86400
+timeout=720
 shm_size="${shm_size}"
 """
 )

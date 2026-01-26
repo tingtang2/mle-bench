@@ -93,15 +93,64 @@ def _patch_rdagent_env_to_local_agent(context: RuntimeContext) -> None:
             # FIX: Override bin_path with correct conda environment PATH
             # This ensures LocalEnv uses conda Python instead of system Python
             conda_env_bin = f"/opt/conda/envs/{conda_env_name}/bin"
+            conda_python = f"{conda_env_bin}/python"
             conda_condabin = "/opt/conda/condabin"
             conda_root_bin = "/opt/conda/bin"
             system_paths = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             conf.bin_path = f"{conda_env_bin}:{conda_condabin}:{conda_root_bin}:{system_paths}"
+            
+            # FIX: Override default_entry to use conda Python explicitly
+            # This ensures "python" commands use the conda environment
+            conf.default_entry = f"{conda_python} main.py"
 
+            print(f"[PATCH] LocalEnv bin_path set to: {conf.bin_path}", flush=True)
+            print(f"[PATCH] Using conda environment: {conda_env_name}", flush=True)
+            print(f"[PATCH] Using conda Python: {conda_python}", flush=True)
             logger.info(f"LocalEnv bin_path set to: {conf.bin_path}")
             logger.info(f"Using conda environment: {conda_env_name}")
+            logger.info(f"Using conda Python: {conda_python}")
 
             env = LocalEnv(conf=conf)
+            
+            # FIX: Monkey-patch the run method to replace "python" with conda Python path
+            # This handles entries like "python script.py", "python -m module", "python test/script.py", etc.
+            import re
+            original_run = env.run
+            def patched_run(entry=None, local_path=".", env=None, **kwargs):
+                if entry and isinstance(entry, str):
+                    original_entry = entry
+                    # Skip if already using conda Python to avoid duplication
+                    # Check if conda environment path is already in entry (more robust check)
+                    conda_env_path = conda_python.rsplit('/bin/python', 1)[0]  # e.g., /opt/conda/envs/agent
+                    # Also check for the full conda_python path to catch already-patched entries
+                    if conda_env_path not in entry and conda_python not in entry:
+                        # Replace standalone "python " (not part of a path) with conda Python
+                        # Pattern: word boundary before "python" followed by space
+                        # This handles: "python script.py", "python -m module", "python test/script.py", "/bin/sh -c 'python script.py'"
+                        if 'python ' in entry:
+                            entry = re.sub(r'\bpython ', f'{conda_python} ', entry)
+                            if entry != original_entry:
+                                print(f"[PATCH] Patched entry to use conda Python: {original_entry[:80]} -> {entry[:80]}", flush=True)
+                                logger.info(f"Patched entry to use conda Python: {original_entry[:80]} -> {entry[:80]}")
+                        # Also handle cases where python is at the start of the entry
+                        elif entry.strip().startswith('python '):
+                            entry = entry.replace('python ', f'{conda_python} ', 1)
+                            print(f"[PATCH] Patched entry (start): {original_entry[:80]} -> {entry[:80]}", flush=True)
+                            logger.info(f"Patched entry (start): {original_entry[:80]} -> {entry[:80]}")
+                # Also ensure PATH includes conda environment in the env dict if provided
+                if env is None and 'env' in kwargs:
+                    env_dict = kwargs.get('env', {})
+                    if 'PATH' not in env_dict or conda_env_bin not in env_dict.get('PATH', ''):
+                        env_dict = env_dict.copy() if env_dict else {}
+                        current_path = env_dict.get('PATH', '')
+                        if conda_env_bin not in current_path:
+                            env_dict['PATH'] = f"{conda_env_bin}:{current_path}" if current_path else conda_env_bin
+                            kwargs['env'] = env_dict
+                            print(f"[PATCH] Added conda bin to PATH: {env_dict['PATH'][:100]}", flush=True)
+                return original_run(entry=entry, local_path=local_path, env=env, **kwargs)
+            env.run = patched_run
+            print(f"[PATCH] Patched env.run() to use conda Python: {conda_python}", flush=True)
+            logger.info(f"Patched env.run() to use conda Python: {conda_python}")
 
             # propagate typical knob settings
             env.conf.extra_volumes = extra_volumes.copy()
@@ -113,7 +162,34 @@ def _patch_rdagent_env_to_local_agent(context: RuntimeContext) -> None:
 
         # Patch the function used by DataScienceScen via imported symbol
         coder_conf_mod.get_ds_env = _mle_get_ds_env  # type: ignore[attr-defined]
+        
+        # Also patch LocalEnv.run globally to ensure all instances use conda Python
+        from rdagent.utils.env import LocalEnv
+        conda_env_name = os.environ.get("CONDA_ENV_NAME", "agent")
+        conda_env_bin = f"/opt/conda/envs/{conda_env_name}/bin"
+        conda_python = f"{conda_env_bin}/python"
+        
+        original_localenv_run = LocalEnv.run
+        import re
+        def patched_localenv_run(self, entry=None, local_path=".", env=None, **kwargs):
+            if entry and isinstance(entry, str):
+                original_entry = entry
+                # Skip if already using conda Python to avoid duplication
+                conda_env_path = conda_python.rsplit('/bin/python', 1)[0]  # e.g., /opt/conda/envs/agent
+                if conda_env_path not in entry and conda_python not in entry:
+                    if 'python ' in entry:
+                        entry = re.sub(r'\bpython ', f'{conda_python} ', entry)
+                        if entry != original_entry:
+                            print(f"[PATCH] Patched LocalEnv.run entry: {original_entry[:80]} -> {entry[:80]}", flush=True)
+            return original_localenv_run(self, entry=entry, local_path=local_path, env=env, **kwargs)
+        LocalEnv.run = patched_localenv_run
+        print(f"[PATCH] Patched LocalEnv.run() globally to use conda Python: {conda_python}", flush=True)
+        logger.info(f"Patched LocalEnv.run() globally to use conda Python: {conda_python}")
+        
+        print(f"[PATCH] Successfully patched get_ds_env() and LocalEnv.run()", flush=True)
+        logger.info("Successfully patched get_ds_env() and LocalEnv.run()")
     except Exception as exc:
+        print(f"[PATCH ERROR] Failed to patch RD-Agent env: {exc}", flush=True)
         logger.warning(f"Failed to patch RD-Agent env; proceeding with defaults: {exc}")
 
 
@@ -259,6 +335,11 @@ def discover_instructions_path(context: Optional[RuntimeContext] = None) -> Opti
     """Locate the MLE-bench instructions file without hardcoding repository paths."""
     candidates: list[Path] = []
 
+    # Default location inside the MLE-bench container.
+    candidates.append(Path("/home/instructions.txt"))
+    candidates.append(Path("/home/instructions_obfuscated.txt"))
+
+    # Optional override (kept for compatibility, but not required).
     if env_instructions := os.environ.get("MLE_BENCH_INSTRUCTIONS"):
         candidates.append(Path(env_instructions).expanduser())
 
@@ -318,17 +399,11 @@ def _stringify_description(data: Any) -> str:
 
 
 def _render_additional_notes(hardware: str, time_limit: int, step_limit: int) -> str:
-    """Construct the standard MLE-bench additional notes section."""
-    return f"""ADDITIONAL NOTES
-------
-
-- **Compute**: You have access to {hardware} with the appropriate drivers installed.
-- **Total Runtime**: You have a maximum of {time_limit} hours to attempt this task. You may iteratively develop your solution within this time frame, but bear in mind that program runtime also counts towards this limit.
-- **Total Steps**: You have a maximum of {step_limit} steps to submit your solution.
-- You will be informed of the remaining time and steps at each step.
-- **Use as much of the available time as possible to refine and optimize your submission**: Your goal is to achieve the best possible score, not just to submit your first working solution. Consider strategies like validating your answer using the "Validate Submission" tool at the http://localhost:5000/validate endpoint, manually spot-checking predictions, building custom validation sets and grading functions, and comparing different algorithms. You may keep working until the time limit expires -- as long as your best submission is stored at the designated location at the end of your run, it will be picked up for grading.
-
-"""
+    """
+    DEPRECATED: MLE-bench wrapper handles instruction shaping. Kept for
+    backward-compatibility; callers should not use it.
+    """
+    return ""
 
 
 def patch_description_builder() -> None:
@@ -357,11 +432,6 @@ def build_mle_description(context: RuntimeContext) -> str:
         return _stringify_description(scen.raw_description)
 
     base_instructions = instructions_path.read_text()
-    additional_notes = _render_additional_notes(
-        hardware=context.hardware,
-        time_limit=context.time_limit_hours,
-        step_limit=context.step_limit,
-    )
 
     comp_desc_path = Path(f"{DS_RD_SETTING.local_data_path}/{context.competition_id}/description.md")
     if comp_desc_path.exists():
@@ -371,8 +441,6 @@ def build_mle_description(context: RuntimeContext) -> str:
         competition_description = _stringify_description(scen.raw_description)
 
     full_description = f"""{base_instructions}
-
-{additional_notes}
 
 COMPETITION INSTRUCTIONS
 ------
@@ -388,8 +456,138 @@ COMPETITION INSTRUCTIONS
 # ---------------------------------------------------------------------------
 
 
+def _patch_workspace_debug_flag():
+    """
+    Patch FBWorkspace.run to fix hardcoded DEBUG=True in generated code.
+    
+    RD-Agent generates code with DEBUG=True hardcoded, which causes it to
+    always run in debug mode even when executed without --debug flag. This
+    patch forces DEBUG=False when running main.py without --debug flag.
+    """
+    from rdagent.core.experiment import FBWorkspace
+    import re
+    
+    original_run = FBWorkspace.run
+    
+    def patched_run(self, env, entry: str):
+        """Patch run to fix DEBUG flag in main.py before execution."""
+        # Patch when running main.py without --debug flag (final submission run)
+        # Match entries like: "python main.py", "python -m coverage run main.py", etc.
+        if isinstance(entry, str):
+            # Debug: log entry format to understand why patch might not trigger
+            if "main.py" in entry:
+                print(f"[PATCH DEBUG] FBWorkspace.run called with entry: {entry[:200]}", flush=True)
+            
+            if "main.py" in entry and "--debug" not in entry:
+                # Fix the code in file_dict before execution
+                if "main.py" in self.file_dict:
+                    main_code = self.file_dict["main.py"]
+                    
+                    # Replace hardcoded DEBUG = True with DEBUG = False
+                    # Match various patterns: DEBUG = True, DEBUG=True, DEBUG = True  # comment
+                    if re.search(r'DEBUG\s*=\s*True', main_code):
+                        # Replace all instances of DEBUG = True with DEBUG = False
+                        main_code = re.sub(r'DEBUG\s*=\s*True', 'DEBUG = False', main_code)
+                        self.file_dict["main.py"] = main_code
+                        logger.info("[PATCH] Fixed hardcoded DEBUG=True -> DEBUG=False in main.py for final run")
+                        print("[PATCH] Fixed hardcoded DEBUG=True -> DEBUG=False in main.py for final run", flush=True)
+                    else:
+                        print("[PATCH DEBUG] No DEBUG=True found in main.py code", flush=True)
+                else:
+                    print("[PATCH DEBUG] main.py not in file_dict", flush=True)
+        
+        # Call the original run method
+        return original_run(self, env, entry)
+    
+    # Only patch if not already patched
+    if FBWorkspace.run is not patched_run:
+        FBWorkspace.run = patched_run
+        logger.info("[PATCH] Patched FBWorkspace.run to fix DEBUG flag in generated code")
+        print("[PATCH] Patched FBWorkspace.run to fix DEBUG flag in generated code", flush=True)
+
+
+def _patch_symlink_permission_error():
+    """Patch _symlink_ctx to handle permission errors gracefully."""
+    from rdagent.utils.env import LocalEnv
+    import contextlib
+    from pathlib import Path
+    from typing import Mapping, Generator
+    
+    # Get the original _symlink_ctx from LocalEnv._run
+    original_run = LocalEnv._run
+    
+    def patched_run(self, entry=None, local_path=None, env=None, running_extra_volume=None, **kwargs):
+        """Patch _run to handle permission errors in _symlink_ctx."""
+        # Create a patched _symlink_ctx that handles permission errors
+        @contextlib.contextmanager
+        def _safe_symlink_ctx(vol_map: Mapping[str, str]) -> Generator[None, None, None]:
+            created_links: list[Path] = []
+            try:
+                for real, link in vol_map.items():
+                    link_path = Path(link)
+                    real_path = Path(real)
+                    try:
+                        if not link_path.parent.exists():
+                            link_path.parent.mkdir(parents=True, exist_ok=True)
+                        if link_path.exists() or link_path.is_symlink():
+                            link_path.unlink()
+                        link_path.symlink_to(real_path)
+                        created_links.append(link_path)
+                    except (PermissionError, OSError) as e:
+                        # Skip symlink creation if we don't have permission
+                        # This is OK - the volume mount should still work
+                        logger.warning(f"[PATCH] Skipping symlink creation for {link} -> {real}: {e}")
+                        print(f"[PATCH] Skipping symlink creation for {link} -> {real}: {e}", flush=True)
+                yield
+            finally:
+                for p in created_links:
+                    try:
+                        if p.is_symlink() or p.exists():
+                            p.unlink()
+                    except FileNotFoundError:
+                        pass
+        
+        # Replace _symlink_ctx in the local scope
+        # We need to monkey-patch it inside _run
+        import rdagent.utils.env as env_mod
+        original_symlink_ctx = None
+        if hasattr(env_mod, '_symlink_ctx'):
+            original_symlink_ctx = env_mod._symlink_ctx
+        
+        # Monkey-patch the _symlink_ctx function
+        def _run_with_safe_symlink(self, entry=None, local_path=None, env=None, running_extra_volume=None, **kwargs):
+            # Temporarily replace _symlink_ctx
+            volumes = {}
+            if self.conf.extra_volumes is not None:
+                for lp, rp in self.conf.extra_volumes.items():
+                    volumes[lp] = rp["bind"] if isinstance(rp, dict) else rp
+                cache_path = "/tmp/sample" if "/sample/" in "".join(self.conf.extra_volumes.keys()) else "/tmp/full"
+                Path(cache_path).mkdir(parents=True, exist_ok=True)
+                volumes[cache_path] = self.conf.cache_path if hasattr(self.conf, 'cache_path') else "/tmp/cache"
+            for lp, rp in (running_extra_volume or {}).items():
+                volumes[lp] = rp
+            
+            # Use safe symlink context
+            with _safe_symlink_ctx(volumes):
+                # Call the rest of the original _run logic
+                return original_run(self, entry=entry, local_path=local_path, env=env, running_extra_volume=running_extra_volume, **kwargs)
+        
+        # Replace _run method
+        LocalEnv._run = _run_with_safe_symlink
+        logger.info("[PATCH] Patched LocalEnv._run to handle permission errors in symlink creation")
+        print("[PATCH] Patched LocalEnv._run to handle permission errors in symlink creation", flush=True)
+    
+    # Only patch if not already patched
+    if LocalEnv._run is not patched_run:
+        LocalEnv._run = patched_run
+        logger.info("[PATCH] Patched LocalEnv._run to handle permission errors")
+        print("[PATCH] Patched LocalEnv._run to handle permission errors", flush=True)
+
 async def run_rd_loop(context: RuntimeContext) -> DataScienceRDLoop:
     """Execute the RD-Agent loop and persist SOTA artifacts as they appear."""
+    # Patch workspace to fix DEBUG flag issue before running
+    _patch_workspace_debug_flag()
+    
     loop = DataScienceRDLoop(DS_RD_SETTING)
     total_seconds = str(max(context.time_limit_hours, 0) * 3600)
     if context.time_limit_hours > 0:

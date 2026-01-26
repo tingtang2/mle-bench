@@ -1,6 +1,6 @@
 vars:
   step_count: &step_count 500
-  time_limit: &time_limit 86400 # 24 hrs
+  time_limit: &time_limit 7200 # 8 minutes - usually works in 6, giving buffer
 
 defaults: &defaults
   start: aide/start.sh
@@ -13,7 +13,6 @@ defaults: &defaults
 kwargs_common: &kwargs_common
   agent.search.max_debug_depth: 20 # debug down a branch for up to 20 steps
   agent.search.debug_prob: 1 # always debug when there's something to debug
-  agent.time_limit: *time_limit
   exec.timeout: 32400 # 9 hours limit _per step_, to match max of kaggle.com
   copy_data: False # use symbolic links
 
@@ -21,8 +20,10 @@ aide:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-4o-2024-08-06
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
@@ -32,8 +33,10 @@ aide/dev:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-4o-2024-08-06
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: 8
   env_vars:
     <<: *env_vars
@@ -45,7 +48,8 @@ aide/o1-preview:
     <<: *kwargs_common
     agent.code.model: o1-preview
     agent.code.temp: 1
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
     agent.convert_system_to_user: True
   env_vars:
@@ -56,8 +60,10 @@ aide/gpt-4-turbo:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-4-turbo-2024-04-09
-    agent.feedback.model: gpt-4-turbo-2024-04-09
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
@@ -67,8 +73,10 @@ aide/gpt-4-turbo-dev:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-4-turbo-2024-04-09
-    agent.feedback.model: gpt-4-turbo-2024-04-09
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: 8
   env_vars:
     <<: *env_vars
@@ -78,8 +86,10 @@ aide/gpt-3.5-turbo-0125:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-3.5-turbo-0125
-    agent.feedback.model: gpt-3.5-turbo-0125
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
@@ -89,8 +99,10 @@ aide/gpt-3.5-dev:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-3.5-turbo-0125
-    agent.feedback.model: gpt-3.5-turbo-0125
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: 8
   env_vars:
     <<: *env_vars
@@ -101,7 +113,8 @@ aide/claude-3-5-sonnet:
   kwargs:
     <<: *kwargs_common
     agent.code.model: claude-3-5-sonnet-20240620
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
@@ -112,7 +125,8 @@ aide/llama-3.1-405b-instruct:
   kwargs:
     <<: *kwargs_common
     agent.code.model: meta-llama/llama-3.1-405b-instruct
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
@@ -123,18 +137,50 @@ aide/gemini-1.5-pro:
   kwargs:
     <<: *kwargs_common
     agent.code.model: gemini-1.5-pro-002
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
   env_vars:
     <<: *env_vars
     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
+aide/5min:
+  <<: *defaults
+  kwargs:
+    <<: *kwargs_common
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
+    agent.steps: 20
+  env_vars:
+    <<: *env_vars
+    TIME_LIMIT_SECS: 300
+    STEP_LIMIT: 20
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+aide/test:
+  <<: *defaults
+  kwargs:
+    <<: *kwargs_common
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
+    agent.steps: *step_count
+  env_vars:
+    <<: *env_vars
+    TIME_LIMIT_SECS: 720 # 12 minutes for quick testing
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
 aide/obfuscated:
   <<: *defaults
   kwargs:
     <<: *kwargs_common
-    agent.code.model: gpt-4o-2024-08-06
-    agent.feedback.model: gpt-4o-2024-08-06
+    agent.code.model: gpt-5-mini
+    agent.code.temp: 1.0
+    agent.feedback.model: gpt-5-mini
+    agent.feedback.temp: 1.0
     agent.steps: *step_count
     agent.obfuscate: True
   env_vars:

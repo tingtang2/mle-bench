@@ -41,6 +41,9 @@ if [[ -z "${STEP_LIMIT_VALUE}" ]]; then
   STEP_LIMIT_VALUE="unbounded"
 fi
 
+# NOTE: Additional notes injection intentionally disabled for RD-Agent.
+# We rely on the base MLE-bench instructions only.
+
 echo "====================================="
 echo "RD-Agent Starting"
 echo "Competition: ${COMPETITION_ID}"
@@ -49,16 +52,29 @@ echo "Step limit: ${STEP_LIMIT_VALUE}"
 echo "Hardware: ${HARDWARE}"
 echo "====================================="
 
+# CPU allocation (pin within container; can be overridden via env vars or args)
+start_cpu=${start_cpu:-0}
+CPUS_PER_TASK=${cpus_per_task:-22}
+for arg in "$@"; do
+  if [[ $arg == start_cpu=* ]]; then
+    start_cpu=${arg#start_cpu=}
+  fi
+  if [[ $arg == cpus_per_task=* ]]; then
+    CPUS_PER_TASK=${arg#cpus_per_task=}
+  fi
+done
+end_cpu=$((start_cpu + CPUS_PER_TASK - 1))
+
 # The template always calls run_agent.py and lets it do the heavy lifting.
 if [[ "${TIME_LIMIT_SECS}" =~ ^[0-9]+$ && "${TIME_LIMIT_SECS}" -gt 0 ]]; then
-  timeout "${TIME_LIMIT_SECS}" python "${AGENT_DIR}/run_agent.py" "$@"
+  taskset -c "${start_cpu}-${end_cpu}" timeout "${TIME_LIMIT_SECS}" python "${AGENT_DIR}/run_agent.py" "$@"
   EXIT_CODE=$?
   if [[ "${EXIT_CODE}" -eq 124 ]]; then
     echo "RD-Agent timed out after ${TIME_LIMIT_SECS} seconds"
     exit 124
   fi
 else
-  python "${AGENT_DIR}/run_agent.py" "$@"
+  taskset -c "${start_cpu}-${end_cpu}" python "${AGENT_DIR}/run_agent.py" "$@"
   EXIT_CODE=$?
 fi
 

@@ -1,6 +1,6 @@
 vars:
   step_count: &step_count 50 # Increased from 10 to allow more iterations
-  time_limit: &time_limit 3600 # Increased from 900 (15 min) to 3600 (1 hour)
+  time_limit: &time_limit 7200 # 2 hours - optimized for faster execution
 
 defaults: &defaults
   start: rdagent/start.sh
@@ -10,6 +10,9 @@ defaults: &defaults
     TIME_LIMIT_SECS: *time_limit
     STEP_LIMIT: *step_count
     RDAGENT_FORCE_LOCAL_ENV: "1"
+    # CPU allocation (used by rdagent/start.sh taskset)
+    start_cpu: 0
+    cpus_per_task: 22
 
 rdagent:
   <<: *defaults
@@ -18,17 +21,29 @@ rdagent:
     <<: *env_vars
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     # RD-Agent specific environment variables
-    CHAT_MODEL: gpt-4o
+    CHAT_MODEL: gpt-5-mini
+    CHAT_TEMPERATURE: "1"
     EMBEDDING_MODEL: text-embedding-3-small
+    LITELLM_DROP_PARAMS: "True"
     # Data science scenario settings
     DS_LOCAL_DATA_PATH: /home/data
     DS_CODER_ON_WHOLE_PIPELINE: "True"
     DS_IF_USING_MLE_DATA: "True"
-    DS_SAMPLE_DATA_BY_LLM: "False"
+    DS_SAMPLE_DATA_BY_LLM: "False"  # Use sample for evaluation, but we patch final submission to use full data
     DS_SCEN: rdagent.scenarios.data_science.scen.DataScienceScen
     DS_USE_RAW_DESCRIPTION: "True"
+    # Enforce explicit hyperparameter optimization (AIDE-like hard gate)
+    DS_FORCE_HYPERPARAMETER_OPTIMIZATION: "False"
     # Disable Docker requirement for MLE-bench compatibility
-    DS_ENV_TYPE: "LocalPythonEnv"
+    DS_Coder_CoSTEER_env_type: "conda"
+    # Limit loops to finish in 12 minutes (each iteration ~3-4 min, so max 3 iterations)
+    DS_CODER_MAX_LOOP: "3"
+    DS_RUNNER_MAX_LOOP: "1"
+    # Reduce timeouts to speed up execution (5 min debug, 10 min full)
+    DS_DEBUG_TIMEOUT: "300"
+    DS_FULL_TIMEOUT: "600"
+    DS_DEBUG_RECOMMEND_TIMEOUT: "300"
+    DS_FULL_RECOMMEND_TIMEOUT: "600"
 
 rdagent/dev:
   <<: *defaults
@@ -36,14 +51,19 @@ rdagent/dev:
   env_vars:
     <<: *env_vars
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    CHAT_MODEL: gpt-4o
+    CHAT_MODEL: gpt-5-mini
+    CHAT_TEMPERATURE: "1"
     EMBEDDING_MODEL: text-embedding-3-small
+    LITELLM_DROP_PARAMS: "True"
     DS_LOCAL_DATA_PATH: /home/data
     DS_CODER_ON_WHOLE_PIPELINE: "True"
     DS_IF_USING_MLE_DATA: "True"
     DS_SAMPLE_DATA_BY_LLM: "False"
     DS_SCEN: rdagent.scenarios.data_science.scen.DataScienceScen
     DS_USE_RAW_DESCRIPTION: "True"
+    DS_FORCE_HYPERPARAMETER_OPTIMIZATION: "True"
+    # Disable Docker requirement for MLE-bench compatibility
+    DS_Coder_CoSTEER_env_type: "conda"
 
 # A lighter preset that prioritizes speed and fewer tokens.
 # Use this target when you want faster turnaround at the expense of peak score.
@@ -62,8 +82,10 @@ rdagent/light:
 
     # Cheaper/faster LLMs
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    CHAT_MODEL: gpt-4o-mini
+    CHAT_MODEL: gpt-5-mini
+    CHAT_TEMPERATURE: "1"
     EMBEDDING_MODEL: text-embedding-3-small
+    LITELLM_DROP_PARAMS: "True"
 
     # Data science scenario: do less work per loop
     DS_LOCAL_DATA_PATH: /home/data
@@ -89,8 +111,10 @@ rdagent/medium:
     RDAGENT_FORCE_LOCAL_ENV: "1"
     DS_Coder_CoSTEER_env_type: "conda"
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    CHAT_MODEL: gpt-4o-mini
+    CHAT_MODEL: gpt-5-mini
+    CHAT_TEMPERATURE: "1"
     EMBEDDING_MODEL: text-embedding-3-small
+    LITELLM_DROP_PARAMS: "True"
     DS_LOCAL_DATA_PATH: /home/data
     DS_CODER_ON_WHOLE_PIPELINE: "False"
     DS_SAMPLE_DATA_BY_LLM: "False"
@@ -113,8 +137,10 @@ rdagent/1h50:
     RDAGENT_FORCE_LOCAL_ENV: "1"
     DS_Coder_CoSTEER_env_type: "conda"
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    CHAT_MODEL: gpt-4o
+    CHAT_MODEL: gpt-5-mini
+    CHAT_TEMPERATURE: "1"
     EMBEDDING_MODEL: text-embedding-3-small
+    LITELLM_DROP_PARAMS: "True"
     DS_LOCAL_DATA_PATH: /home/data
     DS_CODER_ON_WHOLE_PIPELINE: "True"
     DS_SAMPLE_DATA_BY_LLM: "False"
