@@ -458,11 +458,10 @@ COMPETITION INSTRUCTIONS
 
 def _patch_workspace_debug_flag():
     """
-    Patch FBWorkspace.run to fix hardcoded DEBUG=True in generated code.
-    
-    RD-Agent generates code with DEBUG=True hardcoded, which causes it to
-    always run in debug mode even when executed without --debug flag. This
-    patch forces DEBUG=False when running main.py without --debug flag.
+    Patch FBWorkspace.run to fix common code generation issues:
+    1. Hardcoded DEBUG=True -> DEBUG=False
+    2. XGBoost eval_metric in fit() -> move to constructor
+    3. Pandas Categorical fillna(-1) -> convert to object first
     """
     from rdagent.core.experiment import FBWorkspace
     import re
@@ -470,7 +469,7 @@ def _patch_workspace_debug_flag():
     original_run = FBWorkspace.run
     
     def patched_run(self, env, entry: str):
-        """Patch run to fix DEBUG flag in main.py before execution."""
+        """Patch run to fix common bugs in main.py before execution."""
         # Patch when running main.py without --debug flag (final submission run)
         # Match entries like: "python main.py", "python -m coverage run main.py", etc.
         if isinstance(entry, str):
@@ -482,17 +481,95 @@ def _patch_workspace_debug_flag():
                 # Fix the code in file_dict before execution
                 if "main.py" in self.file_dict:
                     main_code = self.file_dict["main.py"]
+                    original_code = main_code
+                    patches_applied = []
                     
-                    # Replace hardcoded DEBUG = True with DEBUG = False
-                    # Match various patterns: DEBUG = True, DEBUG=True, DEBUG = True  # comment
+                    # Fix 1: Replace hardcoded DEBUG = True with DEBUG = False
                     if re.search(r'DEBUG\s*=\s*True', main_code):
-                        # Replace all instances of DEBUG = True with DEBUG = False
                         main_code = re.sub(r'DEBUG\s*=\s*True', 'DEBUG = False', main_code)
+                        patches_applied.append("DEBUG=True -> False")
+                    
+                    # Fix 2: XGBoost eval_metric - move from fit() to constructor
+                    # In XGBoost 2.x, eval_metric should be in constructor, not fit()
+                    # Pattern: model.fit(..., eval_metric="error", ...)
+                    # Use multiline dotall to match across lines
+                    eval_metric_in_fit = re.search(r'\.fit\s*\([^)]*?eval_metric\s*=', main_code, re.MULTILINE | re.DOTALL)
+                    if eval_metric_in_fit:
+                        # Extract eval_metric value from fit() call (handle multiline)
+                        fit_match = re.search(r'\.fit\s*\([^)]*?eval_metric\s*=\s*["\']([^"\']+)["\']', main_code, re.MULTILINE | re.DOTALL)
+                        if fit_match:
+                            eval_metric_value = fit_match.group(1)
+                            # Remove eval_metric from fit() call
+                            # Handle both: eval_metric="...", and , eval_metric="...",
+                            main_code = re.sub(
+                                r',\s*eval_metric\s*=\s*["\']' + re.escape(eval_metric_value) + r'["\']\s*,?\s*',
+                                ', ',
+                                main_code,
+                                flags=re.MULTILINE | re.DOTALL
+                            )
+                            main_code = re.sub(
+                                r'eval_metric\s*=\s*["\']' + re.escape(eval_metric_value) + r'["\']\s*,?\s*',
+                                '',
+                                main_code,
+                                flags=re.MULTILINE | re.DOTALL
+                            )
+                            # Add eval_metric to XGBClassifier constructor
+                            # Find XGBClassifier instantiations (handle multiline with **MODEL_PARAMS)
+                            # Look for pattern: model = XGBClassifier(**MODEL_PARAMS) or XGBClassifier(...)
+                            
+                            # First try: XGBClassifier(**MODEL_PARAMS) - most common pattern
+                            if re.search(r'XGBClassifier\s*\(\s*\*\*MODEL_PARAMS\s*\)', main_code):
+                                if 'eval_metric' not in re.search(r'XGBClassifier\s*\(\s*\*\*MODEL_PARAMS\s*\)', main_code).group(0):
+                                    main_code = re.sub(
+                                        r'XGBClassifier\s*\(\s*\*\*MODEL_PARAMS\s*\)',
+                                        rf'XGBClassifier(**MODEL_PARAMS, eval_metric="{eval_metric_value}")',
+                                        main_code,
+                                        count=1
+                                    )
+                                    patches_applied.append(f"XGBoost eval_metric='{eval_metric_value}' moved to constructor")
+                            # Second try: XGBClassifier with explicit parameters
+                            elif re.search(r'XGBClassifier\s*\([^)]+\)', main_code):
+                                # Find XGBClassifier that doesn't have eval_metric
+                                xgb_matches = list(re.finditer(r'XGBClassifier\s*\([^)]+\)', main_code))
+                                for match in reversed(xgb_matches):  # Start from last (likely the one before fit())
+                                    if 'eval_metric' not in match.group(0):
+                                        # Add eval_metric before closing paren
+                                        replacement = match.group(0).rstrip(')') + f', eval_metric="{eval_metric_value}")'
+                                        main_code = main_code[:match.start()] + replacement + main_code[match.end():]
+                                        patches_applied.append(f"XGBoost eval_metric='{eval_metric_value}' moved to constructor")
+                                        break
+                    
+                    # Fix 3: Pandas Categorical fillna(-1) issue
+                    # Cannot fillna(-1) on Categorical without adding -1 to categories first
+                    # Pattern: df[col + "_code"] = df[col].map(mapping).fillna(-1).astype(int)
+                    # Solution: Convert to object/string first before fillna
+                    categorical_fillna_patterns = [
+                        # Pattern 1: df[col + "_code"] = df[col].map(mapping).fillna(-1).astype(int)
+                        (r'(\w+\[["\']?[\w_]+\s*\+\s*["\']_code["\']\]\s*=\s*[^=]+\.map\([^)]+\)\s*)\.fillna\(-1\)(\.astype\(int\))?',
+                         r'\1.astype(object).fillna(-1)\2'),
+                        # Pattern 2: df[col].fillna(-1) after map() on categorical (general)
+                        (r'(\w+\[["\'][\w_]+["\']\]\s*=\s*[^=]+\.map\([^)]+\)\s*)\.fillna\(-1\)(\.astype\(int\))?',
+                         r'\1.astype(object).fillna(-1)\2'),
+                        # Pattern 3: Any .map(...).fillna(-1) pattern
+                        (r'(\w+\[[^\]]+\]\s*=\s*[^=]+\.map\([^)]+\)\s*)\.fillna\(-1\)(\.astype\(int\))?',
+                         r'\1.astype(object).fillna(-1)\2'),
+                    ]
+                    for pattern, replacement in categorical_fillna_patterns:
+                        if re.search(pattern, main_code):
+                            main_code = re.sub(pattern, replacement, main_code)
+                            if "Pandas Categorical fillna(-1)" not in str(patches_applied):
+                                patches_applied.append("Pandas Categorical fillna(-1) fixed")
+                            break
+                    
+                    if main_code != original_code:
                         self.file_dict["main.py"] = main_code
-                        logger.info("[PATCH] Fixed hardcoded DEBUG=True -> DEBUG=False in main.py for final run")
-                        print("[PATCH] Fixed hardcoded DEBUG=True -> DEBUG=False in main.py for final run", flush=True)
+                        patch_msg = f"[PATCH] Applied fixes to main.py: {', '.join(patches_applied)}"
+                        logger.info(patch_msg)
+                        print(patch_msg, flush=True)
+                    elif patches_applied:
+                        print(f"[PATCH DEBUG] No changes needed, but patterns detected", flush=True)
                     else:
-                        print("[PATCH DEBUG] No DEBUG=True found in main.py code", flush=True)
+                        print("[PATCH DEBUG] No common bugs found in main.py code", flush=True)
                 else:
                     print("[PATCH DEBUG] main.py not in file_dict", flush=True)
         
@@ -502,8 +579,8 @@ def _patch_workspace_debug_flag():
     # Only patch if not already patched
     if FBWorkspace.run is not patched_run:
         FBWorkspace.run = patched_run
-        logger.info("[PATCH] Patched FBWorkspace.run to fix DEBUG flag in generated code")
-        print("[PATCH] Patched FBWorkspace.run to fix DEBUG flag in generated code", flush=True)
+        logger.info("[PATCH] Patched FBWorkspace.run to fix common code generation bugs")
+        print("[PATCH] Patched FBWorkspace.run to fix common code generation bugs", flush=True)
 
 
 def _patch_symlink_permission_error():
