@@ -41,8 +41,8 @@ if [[ -z "${STEP_LIMIT_VALUE}" ]]; then
   STEP_LIMIT_VALUE="unbounded"
 fi
 
-# NOTE: Additional notes injection intentionally disabled for RD-Agent.
-# We rely on the base MLE-bench instructions only.
+# NOTE: Additional notes are now enabled and will be appended to instructions
+# by run_agent.py's build_mle_description() function.
 
 echo "====================================="
 echo "RD-Agent Starting"

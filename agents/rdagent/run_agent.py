@@ -440,12 +440,42 @@ def build_mle_description(context: RuntimeContext) -> str:
         logger.warning(f"Competition description not found at {comp_desc_path}, using fallback")
         competition_description = _stringify_description(scen.raw_description)
 
+    # Read and append additional_notes.txt if it exists
+    additional_notes = ""
+    additional_notes_path = context.paths.agent_root / "additional_notes.txt"
+    if additional_notes_path.exists():
+        try:
+            notes_template = additional_notes_path.read_text()
+            # Substitute environment variables
+            # Get hardware from context (set in start.sh) or fallback to environment or CPU
+            hardware = context.hardware or os.environ.get("HARDWARE", "CPU")
+            # Format time limit
+            time_limit_secs = context.time_limit_secs or (context.time_limit_hours * 3600)
+            if time_limit_secs > 0:
+                hours = time_limit_secs // 3600
+                minutes = (time_limit_secs % 3600) // 60
+                seconds = time_limit_secs % 60
+                time_limit = f"{hours}hrs {minutes}mins {seconds}secs"
+            else:
+                time_limit = "unbounded"
+            # Get step limit
+            step_limit = str(context.step_limit) if context.step_limit > 0 else "unbounded"
+            
+            # Substitute variables
+            additional_notes = notes_template.replace("${HARDWARE}", hardware)
+            additional_notes = additional_notes.replace("${TIME_LIMIT}", time_limit)
+            additional_notes = additional_notes.replace("${STEP_LIMIT}", step_limit)
+            logger.info("Appended additional_notes.txt to description")
+        except Exception as exc:
+            logger.warning(f"Failed to read/process additional_notes.txt: {exc}")
+
     full_description = f"""{base_instructions}
 
 COMPETITION INSTRUCTIONS
 ------
 
 {competition_description}
+{additional_notes}
 """
     logger.info(f"Generated MLE-bench description ({len(full_description)} chars)")
     return full_description
