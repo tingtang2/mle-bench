@@ -15,6 +15,8 @@ rdagent_ds:
     <<: *env_vars
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     CHAT_MODEL: "gpt-5-mini"
+    CHAT_TEMPERATURE: "1"
+    LITELLM_DROP_PARAMS: "true"
     DS_ENABLE_KNOWLEDGE_BASE: "false"
 
 rdagent_ds/baseline:
@@ -24,6 +26,8 @@ rdagent_ds/baseline:
     TIME_LIMIT_SECS: 7200  # 2 hours
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     CHAT_MODEL: "gpt-5-mini"
+    CHAT_TEMPERATURE: "1"
+    LITELLM_DROP_PARAMS: "true"
     DS_ENABLE_KNOWLEDGE_BASE: "false"
 
 rdagent_ds/dev:
