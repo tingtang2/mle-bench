@@ -1,5 +1,5 @@
 vars:
-  time_limit: &time_limit 720 # 12 minutes (720 seconds)
+  time_limit: &time_limit 360 # 1 hour (3600 seconds)
   step_count: &step_count 500
 
 defaults: &defaults

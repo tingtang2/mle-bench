@@ -1,0 +1,46 @@
+{
+  "total_runs": 45,
+  "valid_scores_count": 2,
+  "semantically_padded_count": 37,
+  "other_invalid_count": 6,
+  "valid_scores": [
+    {
+      "competition_id": "playground-series-s5e8",
+      "score": 0.9653,
+      "gold_threshold": 0.97794,
+      "silver_threshold": 0.9779,
+      "bronze_threshold": 0.97768,
+      "median_threshold": 0.977665,
+      "any_medal": false,
+      "gold_medal": false,
+      "silver_medal": false,
+      "bronze_medal": false,
+      "above_median": false,
+      "submission_exists": true,
+      "valid_submission": true,
+      "is_lower_better": false,
+      "created_at": "2026-01-26T18-39-16-GMT",
+      "submission_path": "runs/2026-01-26T12-32-25-GMT_run-group_rdagent/playground-series-s5e8_571d11ef-6c9a-4300-b17b-19abb13c2a22/submission/submission.csv",
+      "run": "playground-series-s5e8_571d11ef-6c9a-4300-b17b-19abb13c2a22"
+    },
+    {
+      "competition_id": "gnss-classification",
+      "score": 0.7875,
+      "gold_threshold": 0.85882,
+      "silver_threshold": 0.85497,
+      "bronze_threshold": 0.8206,
+      "median_threshold": 0.81025,
+      "any_medal": false,
+      "gold_medal": false,
+      "silver_medal": false,
+      "bronze_medal": false,
+      "above_median": false,
+      "submission_exists": true,
+      "valid_submission": true,
+      "is_lower_better": false,
+      "created_at": "2026-01-26T18-39-16-GMT",
+      "submission_path": "runs/2026-01-26T12-32-25-GMT_run-group_rdagent/gnss-classification_1eed753d-0b24-4adb-a386-d39f18921add/submission/submission.csv",
+      "run": "gnss-classification_1eed753d-0b24-4adb-a386-d39f18921add"
+    }
+  ]
+}

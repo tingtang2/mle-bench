@@ -1,6 +1,6 @@
 vars:
   step_count: &step_count 500
-  time_limit: &time_limit 360 # 1 hour - usually works in 6, giving buffer
+  time_limit: &time_limit 7200 # 2 hours - usually works in 6, giving buffer
 
 defaults: &defaults
   start: aide/start.sh
