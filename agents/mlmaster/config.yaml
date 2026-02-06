@@ -21,8 +21,7 @@ kwargs_common: &kwargs_common
   agent.feedback.api_key: ${OPENAI_API_KEY}
   agent.steps: *step_count
   agent.steerable_reasoning: false  # Set to false for OpenAI models
-  agent.check_format: true  # Temporarily disabled to test HPO enforcement
-  agent.require_hyperparameter_tuning: false  # Enforce hyperparameter tuning
+  agent.check_format: true 
   start_cpu: 0  # Still in kwargs for Python, but also in env_vars for bash script
   cpus_per_task: 22  # CPUs per run (used by start.sh taskset)
 
