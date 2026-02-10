@@ -60,7 +60,6 @@ fi
 
 METADATA="${LATEST_RUN}/metadata.json"
 SUBMISSION_JSONL="${LATEST_RUN}/submission.jsonl"
-GRADING_OUTPUT="${LATEST_RUN}/grading_output"
 
 python experiments/make_submission.py \
   --metadata "$METADATA" \
@@ -70,8 +69,4 @@ python experiments/make_submission.py \
 
 mlebench grade \
   --submission "$SUBMISSION_JSONL" \
-  --output-dir "$GRADING_OUTPUT"
-
-echo ""
-echo "Grading results saved to: $GRADING_OUTPUT"
-ls -t "$GRADING_OUTPUT"/*_grading_report.json 2>/dev/null | head -1 | xargs cat 2>/dev/null || true
+  --output-dir "$LATEST_RUN"
