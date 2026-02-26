@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run AIDE with 3 seeds, 10 competitions, 10 parallel workers
 
-cd /home/amrutharao/mle/llms-for-mle-bench/mle-bench
+cd "$(dirname "$0")"
 
 python3 run_agent.py \
   --agent-id aide \

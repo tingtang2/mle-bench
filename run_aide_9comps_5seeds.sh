@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run AIDE with 5 seeds, 9 competitions, 9 parallel workers, 2 hours each
 
-cd /home/amrutharao/llms-for-mle-bench/mle-bench
+cd "$(dirname "$0")"
 
 # Check if OPENAI_API_KEY is set
 if [ -z "$OPENAI_API_KEY" ]; then

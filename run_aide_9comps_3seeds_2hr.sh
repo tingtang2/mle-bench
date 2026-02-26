@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run AIDE with 3 seeds, 9 competitions, 9 parallel workers, 2 hours each
 
-cd /home/amrutharao/mle/llms-for-mle-bench/mle-bench
+cd "$(dirname "$0")"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="runs/aide_9comps_3seeds_2hr_${TIMESTAMP}.log"

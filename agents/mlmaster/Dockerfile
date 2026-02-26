@@ -29,5 +29,9 @@ RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 libgl1-mesa-glx 
 RUN conda run -n ${CONDA_ENV_NAME} bash -c "pip install -r ${AGENT_DIR}/requirements.txt" && \
     conda clean -afy
 
-# put all the agent files in the expected location
-COPY . ${AGENT_DIR}
+# Integration files (start script, notes, requirements)
+COPY start.sh additional_notes.txt ${AGENT_DIR}/
+COPY requirements.txt ${AGENT_DIR}/requirements.txt
+
+# ML-Master upstream code from submodule
+COPY core/ ${AGENT_DIR}/

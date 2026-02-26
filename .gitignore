@@ -4,13 +4,8 @@ outputs/
 /data/
 /data_privateonly/
 
-runs/*/*/
-runs/*/metadata.json
-
-# Re-include metadata.json, dolos, and grading reports
-!runs/*/dolos
-!runs/**/*_grading_report.json
-!runs/**/grading_report_*.json
+# Ignore all run outputs (grading JSONs, logs, etc.) — do not commit
+runs/
 
 cache/
 # MLE-bench [END]

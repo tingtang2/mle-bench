@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run ML-Master baseline (no HPO enforcement) with 3 seeds, 9 competitions, 9 parallel workers, 2 hours per run
 
-cd /home/amrutharao/mle/llms-for-mle-bench/mle-bench
+cd "$(dirname "$0")"
 
 python3 run_agent.py \
   --agent-id mlmaster \

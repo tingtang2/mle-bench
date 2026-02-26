@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run ML-Master with 3 seeds, 9 competitions, 9 parallel workers, 2 hours per run
+# Run ML-Master with 10 seeds, 9 competitions, 9 parallel workers, 2 hours per run (with 1-min buffer between runs)
 
 cd "$(dirname "$0")"
 
@@ -13,8 +13,8 @@ PYTHON="${PWD}/.venv/bin/python"
 $PYTHON run_agent.py \
   --agent-id mlmaster \
   --competition-set experiments/splits/mlmaster_9comps_baseline.txt \
-  --n-seeds 3 \
+  --n-seeds 10 \
   --n-workers 9 \
-  2>&1 | tee runs/mlmaster_9comps_3seeds_$(date +%Y%m%d_%H%M%S).log
+  2>&1 | tee runs/mlmaster_9comps_10seeds_$(date +%Y%m%d_%H%M%S).log
 
 echo "Run completed at $(date)"

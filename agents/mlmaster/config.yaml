@@ -1,5 +1,6 @@
+# time_limit in seconds (7200 = 2 hours)
 vars:
-  time_limit: &time_limit 360 # 1 hour (3600 seconds)
+  time_limit: &time_limit 7200
   step_count: &step_count 500
 
 defaults: &defaults
@@ -21,7 +22,8 @@ kwargs_common: &kwargs_common
   agent.feedback.api_key: ${OPENAI_API_KEY}
   agent.steps: *step_count
   agent.steerable_reasoning: false  # Set to false for OpenAI models
-  agent.check_format: true 
+  agent.check_format: true
+  agent.require_hyperparameter_tuning: true  # Enable HPO scoring and reward shaping
   start_cpu: 0  # Still in kwargs for Python, but also in env_vars for bash script
   cpus_per_task: 22  # CPUs per run (used by start.sh taskset)
 

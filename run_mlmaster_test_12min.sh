@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test run for ML-Master with hyperparameter tuning enabled, 12 minutes
-cd /home/amrutharao/mle/llms-for-mle-bench/mle-bench
+cd "$(dirname "$0")"
 
 # Override TIME_LIMIT_SECS for test (720 seconds = 12 minutes)
 export TIME_LIMIT_SECS=720
