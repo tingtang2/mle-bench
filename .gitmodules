@@ -1,0 +1,3 @@
+[submodule "agents/mlmaster/core"]
+	path = agents/mlmaster/core
+	url = https://github.com/sjtu-sai-agents/ML-Master.git
