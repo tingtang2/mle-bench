@@ -1,5 +1,5 @@
 id: wine-quality-ordinal
-name: "Wine Quality Prediction: Ordinal Regression Challenge"
+name: Predicting Wine Quality - Ordinal Regression
 competition_type: simple
 awards_medals: false
 prizes: null

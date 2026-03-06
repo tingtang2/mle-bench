@@ -1,5 +1,5 @@
 id: gnss-classification
-name: GNSS Classification
+name: GNSS LOS/NLOS Classification
 competition_type: simple
 awards_medals: false
 prizes: null

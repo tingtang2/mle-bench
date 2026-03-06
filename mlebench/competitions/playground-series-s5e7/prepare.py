@@ -10,34 +10,27 @@ def prepare(raw: Path, public: Path, private: Path):
     old_train = read_csv(raw / "train.csv")
     new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
 
-    # Find target column
-    target_col = None
-    for col in ['target', 'y', 'label']:
-        if col in old_train.columns:
-            target_col = col
-            break
-    if target_col is None:
-        target_col = old_train.columns[-1]
-    
-    # Find id column
-    id_col = None
-    for col in ['id', 'Id', 'ID', 'sample_id']:
-        if col in old_train.columns:
-            id_col = col
-            break
-    if id_col is None:
-        id_col = old_train.columns[0]
+    # Target column
+    target_col = "Personality"
 
     # Create sample submission
-    sample_submission = new_test[[id_col]].copy()
-    # Use most frequent class as default
-    most_frequent = new_train[target_col].mode()[0]
-    sample_submission[target_col] = most_frequent
+    sample_submission = new_test[["id"]].copy()
+    sample_submission[target_col] = "Extrovert"  # Default prediction
     sample_submission.to_csv(public / "sample_submission.csv", index=False)
 
-    # Create private files
+    # Create private files (answers with the target column)
     new_test.to_csv(private / "test.csv", index=False)
 
     # Create public files visible to agents
     new_train.to_csv(public / "train.csv", index=False)
-    new_test.drop(target_col, axis=1).to_csv(public / "test.csv", index=False)
+
+    # Create public test set without the target column
+    new_test_public = new_test.drop(columns=[target_col])
+    new_test_public.to_csv(public / "test.csv", index=False)
+
+    # Checks
+    assert target_col not in new_test_public.columns, "Public test set should not have target column"
+    assert target_col in new_train.columns, "Train set should have target column"
+    assert len(new_train) + len(new_test) == len(
+        old_train
+    ), "Length of new_train and new_test should equal length of old_train"

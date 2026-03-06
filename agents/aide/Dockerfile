@@ -13,6 +13,7 @@ ENV CODE_DIR=${CODE_DIR}
 ARG AGENT_DIR
 ENV AGENT_DIR=${AGENT_DIR}
 
+RUN pip install "httpx<0.28.0"
 RUN mkdir ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}
 
 ARG CONDA_ENV_NAME=agent
@@ -20,6 +21,7 @@ ARG REQUIREMENTS=${AGENT_DIR}/requirements.txt
 
 # copy just the requirements file, so that we can cache conda separately from the agent files
 COPY requirements.txt ${AGENT_DIR}/requirements.txt
+COPY aideml ${AGENT_DIR}/aideml
 
 # Requirements for opencv
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
