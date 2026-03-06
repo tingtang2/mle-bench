@@ -1,0 +1,57 @@
+================================================================================
+SCORES BY COMPETITION AND SEED
+================================================================================
+
+class-prediction-of-cirrhosis-outcomes:
+  Seed 1: 0.37876
+  Seed 2: 0.37874
+  Seed 3: 0.38247
+  Average: 0.37999, Best: 0.38247, Worst: 0.37874
+
+electricity-demand:
+  Seed 1: 0.92410
+  Seed 2: 0.92542
+  Seed 3: 0.90909
+  Average: 0.91954, Best: 0.92542, Worst: 0.90909
+
+gnss-classification:
+  Seed 1: 0.81094
+  Seed 2: 0.81107
+  Seed 3: 0.81540
+  Average: 0.81247, Best: 0.81540, Worst: 0.81094
+
+playground-series-s5e3:
+  Seed 1: 0.84932
+  Seed 2: 0.86758
+  Seed 3: 0.85388
+  Average: 0.85693, Best: 0.86758, Worst: 0.84932
+
+playground-series-s5e6:
+  Seed 1: null (no submission)
+  Seed 2: 0.32784
+  Seed 3: 0.33028
+  Average: 0.32906, Best: 0.33028, Worst: 0.32784
+
+playground-series-s5e7:
+  Seed 1: 0.96762
+  Seed 2: 0.96816
+  Seed 3: 0.96924
+  Average: 0.96834, Best: 0.96924, Worst: 0.96762
+
+playground-series-s5e8:
+  Seed 1: 0.96615
+  Seed 2: 0.96615
+  Seed 3: 0.96780
+  Average: 0.96670, Best: 0.96780, Worst: 0.96615
+
+spaceship-titanic:
+  Seed 1: 0.80345
+  Seed 2: 0.81379
+  Seed 3: 0.81494
+  Average: 0.81073, Best: 0.81494, Worst: 0.80345
+
+wine-quality-ordinal:
+  Seed 1: null (no submission)
+  Seed 2: 0.35314
+  Seed 3: 0.31760
+  Average: 0.33537, Best: 0.35314, Worst: 0.31760

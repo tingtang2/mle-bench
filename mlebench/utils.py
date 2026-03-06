@@ -30,7 +30,19 @@ def authenticate_kaggle_api() -> "KaggleApi":
 
         api = KaggleApi()
         api.authenticate()
-        api.competitions_list()  # a cheap op that requires authentication
+        # Try competitions_list first, but fall back to datasets_list if competitions fail
+        # (some accounts may have dataset access but not competition list access)
+        try:
+            api.competitions_list()  # a cheap op that requires authentication
+        except Exception as comp_error:
+            # If competitions_list fails, try datasets_list as a fallback
+            # This allows accounts with dataset access to proceed even if competition listing is restricted
+            try:
+                api.datasets_list(max_size=1)
+                logger.warning("Competitions list failed, but datasets access works. Proceeding with dataset-based authentication check.")
+            except Exception as dataset_error:
+                # If both fail, raise the original competitions error
+                raise comp_error
         return api
     except Exception as e:
         logger.error(f"Authentication failed: {str(e)}")

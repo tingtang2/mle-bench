@@ -205,7 +205,8 @@ def download_dataset(
     quiet: bool = False,
     force: bool = False,
 ) -> Path:
-    """Downloads the competition data as a zip file using the Kaggle API and returns the path to the zip file."""
+    """Downloads the competition data as a zip file using the Kaggle API and returns the path to the zip file.
+    Falls back to dataset API if competition download fails with 403 (for invite-only competitions)."""
 
     if not download_dir.exists():
         download_dir.mkdir(parents=True)
@@ -229,6 +230,29 @@ def download_dataset(
             logger.warning("You must accept the competition rules before downloading the dataset.")
             _prompt_user_to_accept_rules(competition_id)
             download_dataset(competition_id, download_dir, quiet, force)
+        elif e.status == 403:
+            # Try downloading as a dataset (for invite-only competitions that have public datasets)
+            logger.warning(f"Competition `{competition_id}` download failed with 403. Trying as dataset...")
+            # Map competition IDs to dataset paths if needed
+            dataset_map = {
+                "electricity-demand": "ulrikthygepedersen/electricity-demands"
+            }
+            dataset_path = dataset_map.get(competition_id)
+            if dataset_path:
+                try:
+                    api.dataset_download_files(
+                        dataset=dataset_path,
+                        path=download_dir,
+                        quiet=quiet,
+                        force=force,
+                        unzip=False,
+                    )
+                    logger.info(f"Successfully downloaded dataset `{dataset_path}` for `{competition_id}`")
+                except ApiException as dataset_e:
+                    logger.error(f"Failed to download as dataset: {dataset_e}")
+                    raise e  # Raise the original competition error
+            else:
+                raise e
         else:
             raise e
 

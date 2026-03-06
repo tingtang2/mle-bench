@@ -6,7 +6,6 @@ from mlebench.utils import read_csv
 
 
 def prepare(raw: Path, public: Path, private: Path):
-
     # Create train and test splits from train set
     old_train = read_csv(raw / "train.csv")
     new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
