@@ -101,6 +101,21 @@ class Node(DataClassJsonMixin):
             return 0
         return self.parent.debug_depth + 1  # type: ignore
 
+    def get_ancestor_chain(self) -> list["Node"]:
+        """Return list of ancestors from root to this node's parent."""
+        ancestors = []
+        current = self.parent
+        while current is not None:
+            ancestors.append(current)
+            current = current.parent
+        return ancestors[::-1]  # Root first
+
+    def get_siblings(self) -> list["Node"]:
+        """Get sibling nodes (other children of the same parent)."""
+        if self.parent is None:
+            return []
+        return [child for child in self.parent.children if child.id != self.id]
+
 
 @dataclass
 class InteractiveSession(DataClassJsonMixin):
@@ -191,6 +206,22 @@ class Journal(DataClassJsonMixin):
             summary_part += f"Validation Metric: {n.metric.value}\n"
             summary.append(summary_part)
         return "\n-------------------------------\n".join(summary)
+
+    def get_node_by_id(self, node_id: str) -> Node | None:
+        """Find a node by its ID."""
+        for node in self.nodes:
+            if node.id == node_id:
+                return node
+        return None
+
+    def get_unexplored_siblings(self, node: Node) -> list[Node]:
+        """
+        Get siblings of a node that haven't been fully explored.
+        Useful for backtracking to try alternative paths.
+        """
+        siblings = node.get_siblings()
+        # Filter to leaf nodes or nodes with fewer children
+        return [s for s in siblings if s.is_leaf or len(s.children) < 2]
 
 
 def get_path_to_node(journal: Journal, node_id: str) -> list[str]:

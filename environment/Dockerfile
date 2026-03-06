@@ -42,7 +42,7 @@ ARG REQUIREMENTS=/tmp/requirements.txt
 COPY environment/requirements.txt ${REQUIREMENTS}
 
 # create conda environment and optionally install the requirements to it
-RUN /opt/conda/bin/conda create -n ${CONDA_ENV_NAME} python=${PYTHON_VERSION} -y
+RUN /opt/conda/bin/conda create -n ${CONDA_ENV_NAME} python=${PYTHON_VERSION} -y -c conda-forge --override-channels
 ARG INSTALL_HEAVY_DEPENDENCIES=true
 ENV INSTALL_HEAVY_DEPENDENCIES=${INSTALL_HEAVY_DEPENDENCIES}
 
@@ -59,9 +59,10 @@ ENV PATH="/opt/conda/bin:${PATH}"
 
 # Install stuff for the grading server: mlebench and flask
 COPY . /mlebench
-RUN /opt/conda/bin/conda create -n mleb python=3.11 -y
-RUN /opt/conda/bin/conda run -n mleb pip install flask && \
-    /opt/conda/bin/conda run -n mleb pip install -e /mlebench
+# Accept Anaconda TOS and create conda environment
+RUN /opt/conda/bin/conda create -n ${CONDA_ENV_NAME} python=${PYTHON_VERSION} -y -c conda-forge --override-channels
+RUN /opt/conda/bin/conda run -n ${CONDA_ENV_NAME} pip install flask && \
+    /opt/conda/bin/conda run -n ${CONDA_ENV_NAME} pip install -e /mlebench
 
 # Reset DEBIAN_FRONTEND
 ENV DEBIAN_FRONTEND=

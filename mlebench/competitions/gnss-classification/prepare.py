@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from mlebench.utils import read_csv
@@ -10,16 +11,26 @@ def prepare(raw: Path, public: Path, private: Path):
     # Read the GNSS training data (uses different filename)
     old_train = read_csv(raw / "GNSS_raw_train.csv")
     
-    # Add an ID column if it doesn't exist
-    if "ID" not in old_train.columns:
-        old_train = old_train.reset_index()
-        old_train = old_train.rename(columns={"index": "ID"})
-    
-    new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
-
     # Target column is 'Label' (0 = NLOS, 1 = LOS)
     target_col = "Label"
     id_col = "ID"
+    
+    # Add an ID column if it doesn't exist
+    if id_col not in old_train.columns:
+        old_train = old_train.reset_index()
+        old_train = old_train.rename(columns={"index": id_col})
+    
+    # Remove rows with missing Label values (critical for grading)
+    old_train = old_train.dropna(subset=[target_col])
+    # Also remove rows where Label is empty string
+    old_train = old_train[old_train[target_col].astype(str).str.strip() != ""]
+    # Ensure Label is numeric
+    old_train[target_col] = pd.to_numeric(old_train[target_col], errors='coerce')
+    old_train = old_train.dropna(subset=[target_col])
+    # Convert to int (0 or 1)
+    old_train[target_col] = old_train[target_col].astype(int)
+    
+    new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
 
     # Create sample submission
     sample_submission = new_test[[id_col]].copy()

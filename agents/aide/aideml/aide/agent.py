@@ -8,19 +8,20 @@ import humanize
 from .backend import FunctionSpec, compile_prompt_to_md, query
 from .interpreter import ExecutionResult
 from .journal import Journal, Node
+from .mcts_backtrack import create_selector
 from .utils import data_preview
 from .utils.config import Config
 from .utils.metric import MetricValue, WorstMetricValue
 from .utils.response import extract_code, extract_text_up_to_code, wrap_code
 
 logger = logging.getLogger("aide")
-EDA_MEMORY = """Design: I will conduct exploratory data analysis on the dataset.
-Results: The relevant results of the exploratory data analysis mention that the target variable y is highly imbalanced with 87.93% being 0s and 12.06% being 1s. Two variables, pdays and poutcome, as well as poutcome and previous have very strong negative correlations while pdays and previous have a strong positive correlation. Other correlations are present as well: duration has the strongest positive correlation with the target.
-Validation Metric: N/A (EDA only)
+#EDA_MEMORY = """Design: I will conduct exploratory data analysis on the dataset.
+#Results: The relevant results of the exploratory data analysis mention that the target variable y is highly imbalanced with 87.93% being 0s and 12.06% being 1s. Two variables, pdays and poutcome, as well as poutcome and previous have very strong negative correlations while pdays and previous have a strong positive correlation. Other correlations are present as well: duration has the strongest positive correlation with the target.
+#Validation Metric: N/A (EDA only)
 
--------------------------------
+#-------------------------------
+EDA_MEMORY =""
 
-"""
 
 def format_time(time_in_sec: int):
     return f"{time_in_sec // 3600}hrs {(time_in_sec % 3600) // 60}mins {time_in_sec % 60}secs"
@@ -72,6 +73,27 @@ review_func_spec = FunctionSpec(
     description="Submit a review evaluating the output of the training script.",
 )
 
+error_comparison_func_spec = FunctionSpec(
+    name="compare_errors",
+    json_schema={
+        "type": "object",
+        "properties": {
+            "is_same_error": {
+                "type": "boolean",
+                "description": "True if both errors represent the same underlying issue "
+                "(same root cause, same type of bug), even if the exact message differs. "
+                "False if they are fundamentally different errors.",
+            },
+            "reasoning": {
+                "type": "string",
+                "description": "Brief explanation of why the errors are or aren't the same.",
+            },
+        },
+        "required": ["is_same_error", "reasoning"],
+    },
+    description="Compare two error messages to determine if they represent the same underlying bug.",
+)
+
 
 class Agent:
     def __init__(
@@ -88,6 +110,34 @@ class Agent:
         self.data_preview: str | None = None
         self.start_time = time.time()
         self.current_step = 0
+        # Cache for LLM-based error comparisons to avoid repeated calls
+        self._error_comparison_cache: dict[tuple[str, str], bool] = {}
+
+        # Initialize MCTS node selector for intelligent backtracking
+        mcts_enabled = getattr(self.acfg.search, 'use_mcts', False)
+        if mcts_enabled:
+            mcts_method = getattr(self.acfg.search, 'mcts_method', 'thompson')
+            mcts_kwargs = {}
+
+            if mcts_method == 'thompson':
+                mcts_kwargs['prior_alpha'] = getattr(self.acfg.search, 'thompson_prior_alpha', 1.0)
+                mcts_kwargs['prior_beta'] = getattr(self.acfg.search, 'thompson_prior_beta', 1.0)
+            elif mcts_method == 'ucb1':
+                mcts_kwargs['exploration_weight'] = getattr(self.acfg.search, 'ucb_exploration_weight', 1.414)
+
+            self.node_selector = create_selector(mcts_method, **mcts_kwargs)
+            logger.info(f"[MCTS ENABLED] Using {mcts_method} for node selection")
+        else:
+            self.node_selector = None
+            logger.info("[MCTS DISABLED] Using random node selection")
+
+        # Log error backtracking configuration
+        # 0 or None = disabled, any positive integer = enabled with that threshold
+        error_threshold = getattr(self.acfg.search, 'error_backtrack_threshold', 0)
+        if error_threshold and error_threshold > 0:
+            logger.info(f"[ERROR BACKTRACKING ENABLED] threshold={error_threshold} - Will backtrack after seeing same error {error_threshold} times")
+        else:
+            logger.info("[ERROR BACKTRACKING DISABLED] error_backtrack_threshold=0 or not set")
 
     def search_policy(self) -> Node | None:
         """Select a node to work on (or None to draft a new node)."""
@@ -98,16 +148,79 @@ class Agent:
             logger.info("[search policy] drafting new node (not enough drafts)")
             return None
 
-        # debugging
+        # Get error backtrack threshold from config (0 = disabled)
+        error_backtrack_threshold = getattr(search_cfg, 'error_backtrack_threshold', 0)
+
+        # debugging with error-aware backtracking
         if random.random() < search_cfg.debug_prob:
-            # nodes that are buggy + leaf nodes + debug depth < max debug depth
             debuggable_nodes = [
                 n
                 for n in self.journal.buggy_nodes
                 if (n.is_leaf and n.debug_depth <= search_cfg.max_debug_depth)
             ]
+
             if debuggable_nodes:
                 node_to_debug = random.choice(debuggable_nodes)
+
+                # Check for repeated errors using LLM - trigger backtracking (if enabled)
+                if error_backtrack_threshold > 0:
+                    error_count = self.count_same_errors_in_ancestors(node_to_debug)
+                else:
+                    error_count = 0  # Skip checking if backtracking disabled
+
+                if error_backtrack_threshold > 0 and error_count >= error_backtrack_threshold:
+                    logger.info(
+                        f"[search policy] Same error seen {error_count + 1} times, triggering backtrack"
+                    )
+
+                    # Find where error first occurred
+                    first_error_node = self.find_first_equivalent_error(node_to_debug)
+
+                    if first_error_node and first_error_node.parent:
+                        # Try to find an unexplored sibling at that level
+                        siblings = self.journal.get_unexplored_siblings(first_error_node)
+
+                        # Filter to good (non-buggy) siblings for improvement
+                        good_siblings = [s for s in siblings if not s.is_buggy]
+
+                        if good_siblings:
+                            # Select a sibling to improve instead (using MCTS if enabled)
+                            if self.node_selector:
+                                backtrack_node = self.node_selector.select_best_node(good_siblings)
+                                logger.info(
+                                    f"[search policy] MCTS backtracking to sibling node {backtrack_node.id}"
+                                )
+                            else:
+                                backtrack_node = random.choice(good_siblings)
+                                logger.info(
+                                    f"[search policy] Random backtracking to sibling node {backtrack_node.id}"
+                                )
+                            return backtrack_node
+
+                        # If no good siblings, try buggy siblings with different errors
+                        different_error_siblings = [
+                            s for s in siblings
+                            if s.is_buggy and not self.are_errors_equivalent(
+                                node_to_debug.term_out, s.term_out
+                            )
+                        ]
+                        if different_error_siblings:
+                            if self.node_selector:
+                                backtrack_node = self.node_selector.select_best_node(different_error_siblings)
+                                logger.info(
+                                    f"[search policy] MCTS backtracking to debug different error at node {backtrack_node.id}"
+                                )
+                            else:
+                                backtrack_node = random.choice(different_error_siblings)
+                                logger.info(
+                                    f"[search policy] Random backtracking to debug different error at node {backtrack_node.id}"
+                                )
+                            return backtrack_node
+
+                    # If backtracking failed, draft a new solution
+                    logger.info("[search policy] Backtrack failed, drafting new node")
+                    return None
+
                 logger.info(f"[search policy] debugging node {node_to_debug.id}")
                 return node_to_debug
 
@@ -121,6 +234,124 @@ class Agent:
         greedy_node = self.journal.get_best_node()
         logger.info(f"[search policy] greedy node selected: node {greedy_node.id}")
         return greedy_node
+
+    def are_errors_equivalent(self, error1: str, error2: str) -> bool:
+        """Use LLM to determine if two errors are semantically the same (with caching)."""
+        if not error1 or not error2:
+            return False
+
+        # Quick exact match check first (save LLM calls)
+        if error1 == error2:
+            return True
+
+        # Truncate for comparison and caching
+        error1_trunc = error1[:500]
+        error2_trunc = error2[:500]
+
+        # Check cache (order-independent key)
+        cache_key = tuple(sorted([error1_trunc, error2_trunc]))
+        if cache_key in self._error_comparison_cache:
+            return self._error_comparison_cache[cache_key]
+
+        prompt = {
+            "Task": "Determine if these two error messages represent the same underlying bug or issue.",
+            "Error 1": error1_trunc,
+            "Error 2": error2_trunc,
+            "Instructions": [
+                "Consider the error TYPE (e.g., KeyError, ValueError, FileNotFoundError)",
+                "Consider the ROOT CAUSE (e.g., missing column, wrong data type, file path issue)",
+                "Ignore differences in line numbers, file paths, or variable values",
+                "Return true if fixing one would likely fix the other",
+            ],
+        }
+
+        response = cast(
+            dict,
+            query(
+                system_message=prompt,
+                user_message=None,
+                func_spec=error_comparison_func_spec,
+                model=self.acfg.feedback.model,
+                temperature=0.0,  # Deterministic for consistency
+                convert_system_to_user=self.acfg.convert_system_to_user,
+            ),
+        )
+
+        result = response["is_same_error"]
+        logger.info(f"[error comparison] Same error: {result}, Reason: {response['reasoning']}")
+
+        # Cache result
+        self._error_comparison_cache[cache_key] = result
+        return result
+
+    def count_same_errors_in_ancestors(self, node: Node) -> int:
+        """Count ancestors with semantically equivalent errors using LLM."""
+        if not node.is_buggy or not node.term_out:
+            return 0
+
+        node_error = node.term_out
+        count = 0
+
+        for ancestor in node.get_ancestor_chain():
+            if ancestor.is_buggy and ancestor.term_out:
+                if self.are_errors_equivalent(node_error, ancestor.term_out):
+                    count += 1
+
+        return count
+
+    def find_first_equivalent_error(self, node: Node) -> Node | None:
+        """Find first ancestor with semantically equivalent error."""
+        if not node.is_buggy or not node.term_out:
+            return None
+
+        node_error = node.term_out
+
+        for ancestor in node.get_ancestor_chain():  # Root first
+            if ancestor.is_buggy and ancestor.term_out:
+                if self.are_errors_equivalent(node_error, ancestor.term_out):
+                    return ancestor
+
+        return None
+
+    def _compute_reward(self, node: Node) -> float:
+        """Compute normalized reward for MCTS update.
+
+        Converts the node's metric into a reward value in [0, 1] for MCTS learning.
+
+        Args:
+            node: The node to compute reward for
+
+        Returns:
+            Reward in [0, 1]:
+            - 0.0 for buggy nodes
+            - Normalized metric value (0-1) for successful nodes
+        """
+        if node.is_buggy or node.metric is None:
+            return 0.0
+
+        # Get recent good metrics for normalization (last 20 for efficiency)
+        recent_good = [
+            n.metric for n in self.journal.nodes[-20:]
+            if not n.is_buggy and n.metric is not None
+        ]
+
+        if not recent_good:
+            return 0.5  # Neutral reward if no baseline
+
+        metric_values = [m.value for m in recent_good]
+        min_val, max_val = min(metric_values), max(metric_values)
+
+        if max_val == min_val:
+            return 0.5  # All metrics same, neutral reward
+
+        # Normalize to [0, 1]
+        normalized = (node.metric.value - min_val) / (max_val - min_val)
+
+        # Flip if lower is better (e.g., MSE, cross-entropy)
+        if not node.metric.maximize:
+            normalized = 1.0 - normalized
+
+        return normalized
 
     @property
     def _prompt_environment(self):
@@ -372,6 +603,12 @@ class Agent:
                     f"Actually, node {result_node.id} did not produce a submission.csv"
                 )
         self.journal.append(result_node)
+
+        # Update MCTS node selector with reward (if enabled)
+        if self.node_selector:
+            reward = self._compute_reward(result_node)
+            self.node_selector.update_reward(result_node, reward)
+            logger.info(f"[MCTS] Updated node {result_node.id} with reward={reward:.3f}")
 
         # if the result_node is the best node, cache its submission.csv and solution.py
         # to best_solution/ by copying it there

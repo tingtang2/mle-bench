@@ -36,6 +36,18 @@ class SearchConfig:
     max_debug_depth: int
     debug_prob: float
     num_drafts: int
+    error_backtrack_threshold: int  # backtrack after seeing same error this many times
+
+    # MCTS settings for intelligent node selection
+    use_mcts: bool = True  # Enable MCTS for backtracking
+    mcts_method: str = "thompson"  # Options: 'thompson', 'ucb1', 'random'
+
+    # Thompson Sampling settings
+    thompson_prior_alpha: float = 1.0
+    thompson_prior_beta: float = 1.0
+
+    # UCB1 settings
+    ucb_exploration_weight: float = 1.414
 
 
 @dataclass

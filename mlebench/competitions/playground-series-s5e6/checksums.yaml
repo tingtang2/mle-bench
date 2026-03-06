@@ -1,8 +1,7 @@
-# Checksums will be populated after running: mlebench prepare -c playground-series-s5e6
 private:
-  test.csv: null
+  test.csv: 7cc72cc078c7fe392bcd5b805f66d945
 public:
-  sample_submission.csv: null
-  test.csv: null
-  train.csv: null
-zip: null
+  sample_submission.csv: 094e365bc74348ae2caa51849ea3577e
+  test.csv: 96103a4301ba71111bcf0fffb286bfcc
+  train.csv: d847491301a66d3078e47683047ca2ad
+zip: 9b16e9dba9238fab79a09fc7b40057d2

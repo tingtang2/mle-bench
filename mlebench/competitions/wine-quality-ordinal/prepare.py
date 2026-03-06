@@ -9,11 +9,20 @@ def prepare(raw: Path, public: Path, private: Path):
 
     # Create train and test splits from train set
     old_train = read_csv(raw / "train.csv")
-    new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
-
+    
     # Target column
     target_col = "quality"
     id_col = "Id"
+    
+    # Normalize ID column name (handle case sensitivity issues)
+    # Check if 'Id' exists, if not check for 'id' (lowercase) and rename it
+    if id_col not in old_train.columns:
+        if "id" in old_train.columns:
+            old_train = old_train.rename(columns={"id": id_col})
+        else:
+            raise ValueError(f"Neither 'Id' nor 'id' column found in train.csv. Columns: {list(old_train.columns)}")
+    
+    new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)
 
     # Create sample submission
     sample_submission = new_test[[id_col]].copy()

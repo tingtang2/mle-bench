@@ -1,48 +1,35 @@
-# Predicting Optimal Fertilizers
+# Binary Classification with a Bank Dataset
 
 ## Overview
 
 Welcome to the 2025 Kaggle Playground Series! We plan to continue in the spirit of previous playgrounds, providing interesting and approachable datasets for our community to practice their machine learning skills, and anticipate a competition each month.
 
-**Your Goal:** Your objective is to select the best fertilizer for different weather, soil conditions and crops.
+**Your Goal:** Your goal is to predict whether a client will subscribe to a bank term deposit.
 
 ## Evaluation
 
-Submissions are evaluated according to the **Mean Average Precision @ 3 (MAP@3)**:
-
-$$MAP@3 = \frac{1}{U} \sum_{u=1}^{U} \sum_{k=1}^{min(n,3)} P(k) \times rel(k)$$
-
-where:
-- U is the number of observations
-- P(k) is the precision at cutoff k
-- n is the number of predictions per observation
-- rel(k) is an indicator function equaling 1 if the item at rank k is a relevant (correct) label, zero otherwise
-
-Once a correct label has been scored for an observation, that label is no longer considered relevant for that observation, and additional predictions of that label are skipped in the calculation. For example, if the correct label is A for an observation, the following predictions all score an average precision of 1.0:
-
-- `[A, B, C, D, E]`
-- `[A, A, A, A, A]`
-- `[A, B, A, C, A]`
+Submissions are evaluated using **ROC AUC** between the predicted probability and the observed target.
 
 ## Submission File
 
-For each `id` in the test set, you may predict up to 3 `Fertilizer Name` values, with the predictions space delimited. The file should contain a header and have the following format:
+For each `id` in the test set, you must predict the probability of the binary target `y`. The file should contain a header and have the following format:
 
 ```
-id,Fertilizer Name 
-750000,14-35-14 10-26-26 Urea
-750001,14-35-14 10-26-26 Urea 
-...
+id,y
+750000,0.5
+750001,0.5
+750002,0.5
+etc.
 ```
 
 ## Timeline
 
-- **Start Date:** June 1, 2025
+- **Start Date:** August 1, 2025
 - **Entry Deadline:** Same as the Final Submission Deadline
 - **Team Merger Deadline:** Same as the Final Submission Deadline
-- **Final Submission Deadline:** June 30, 2025
+- **Final Submission Deadline:** August 31, 2025
 
-All deadlines are at 11:59 PM UTC on the corresponding day unless otherwise noted.
+All deadlines are at 11:59 PM UTC on the corresponding day unless otherwise noted. The competition organizers reserve the right to update the contest timeline if they deem it necessary.
 
 ## About the Tabular Playground Series
 
@@ -50,7 +37,7 @@ The goal of the Tabular Playground Series is to provide the Kaggle community wit
 
 ### Synthetically-Generated Datasets
 
-Using synthetic data for Playground competitions allows us to strike a balance between having real-world data (with named features) and ensuring test labels are not publicly available. This allows us to host competitions with more interesting datasets than in the past.
+Using synthetic data for Playground competitions allows us to strike a balance between having real-world data (with named features) and ensuring test labels are not publicly available. This allows us to host competitions with more interesting datasets than in the past. While there are still challenges with synthetic data generation, the state-of-the-art is much better now than when we started the Tabular Playground Series two years ago, and that goal is to produce datasets that have far fewer artifacts. Please feel free to give us feedback on the datasets for the different competitions so that we can continue to improve!
 
 ## Prizes
 
@@ -58,6 +45,8 @@ Using synthetic data for Playground competitions allows us to strike a balance b
 - 2nd Place - Choice of Kaggle merchandise
 - 3rd Place - Choice of Kaggle merchandise
 
+Please note: In order to encourage more participation from beginners, Kaggle merchandise will only be awarded once per person in this series. If a person has previously won, we'll skip to the next team.
+
 ## Citation
 
-Walter Reade and Elizabeth Park. Predicting Optimal Fertilizers. https://kaggle.com/competitions/playground-series-s5e8, 2025. Kaggle.
+Walter Reade and Elizabeth Park. Binary Classification with a Bank Dataset. https://kaggle.com/competitions/playground-series-s5e8, 2025. Kaggle.
